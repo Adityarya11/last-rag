@@ -1,0 +1,30 @@
+# --- ML core ---
+torch>=2.14                      # CUDA build comes from the pytorch-cu130 index set in pyproject.toml
+transformers>=5.19
+sentence-transformers>=6.1       # embeddinggemma-2 + cross-encoder rerankers
+numpy
+
+# --- data + retrieval ---
+datasets                         # WixQA from Hugging Face
+lancedb                          # embedded vector + full-text (BM25) store
+pyarrow
+pandas
+
+# --- LLMs / routers ---
+anthropic                        # Claude Haiku / Sonnet
+httpx                            # Jev (TypeSafe AI) API calls
+
+# --- web ---
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart                 # HTMX form posts
+
+# --- config / utils ---
+pydantic-settings
+python-dotenv
+tqdm
+
+# --- dev ---
+pytest
+ruff
