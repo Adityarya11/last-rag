@@ -64,6 +64,53 @@ Paired difference, `dense|section|html` minus `dense|article|contents`:
 | mrr | +0.042 | [-0.002, +0.085] | 0.063 |
 | ndcg@10 | +0.028 | [-0.011, +0.065] | 0.160 | 
 
+## Step 4: hybrid (RRF) and rerankers on top of `dense|section|html`
+
+All four variants share the best baseline: section chunks, cleaned text. `rrf` fuses the BM25 and dense
+rankings with Reciprocal Rank Fusion (k = 60). `+minilm` / `+bge` take dense's top 30 chunks and re-sort them
+with a cross-encoder (`cross-encoder/ms-marco-MiniLM-L6-v2`, 22M params; `BAAI/bge-reranker-v2-m3`, 568M, bf16, max 512 tokens),
+then append the rest of the dense ranking. Latencies are p50 / p95 per query on the RTX 3050.
+
+### ExpertWritten
+
+| config | any@5 | all@5 | any@20 | mrr | ndcg@10 | p50 / p95 ms |
+|---|---|---|---|---|---|---|
+| dense (baseline) | 0.830 [0.78, 0.88] | 0.705 [0.64, 0.77] | 0.955 [0.93, 0.98] | 0.605 [0.55, 0.66] | 0.647 [0.60, 0.69] | 123 / 154 |
+| rrf | 0.780 [0.72, 0.83] | 0.675 [0.61, 0.74] | 0.945 [0.91, 0.97] | 0.567 [0.52, 0.62] | 0.605 [0.56, 0.65] | 166 / 191 |
+| dense+minilm | 0.780 [0.72, 0.83] | 0.680 [0.61, 0.74] | 0.945 [0.91, 0.97] | 0.558 [0.51, 0.61] | 0.607 [0.56, 0.65] | 284 / 379 |
+| dense+bge | 0.840 [0.79, 0.89] | 0.690 [0.62, 0.76] | 0.950 [0.92, 0.98] | 0.609 [0.56, 0.66] | 0.649 [0.60, 0.69] | 815 / 923 |
+
+### Simulated
+
+| config | any@5 | all@5 | any@20 | mrr | ndcg@10 | p50 / p95 ms |
+|---|---|---|---|---|---|---|
+| dense (baseline) | 0.700 [0.64, 0.76] | 0.615 [0.55, 0.68] | 0.915 [0.88, 0.95] | 0.503 [0.45, 0.56] | 0.550 [0.50, 0.60] | 146 / 185 |
+| rrf | 0.690 [0.62, 0.76] | 0.625 [0.56, 0.69] | 0.880 [0.83, 0.93] | 0.516 [0.46, 0.57] | 0.554 [0.50, 0.61] | 163 / 206 |
+| dense+minilm | 0.680 [0.61, 0.74] | 0.615 [0.55, 0.68] | 0.915 [0.88, 0.95] | 0.510 [0.46, 0.56] | 0.561 [0.51, 0.61] | 285 / 374 |
+| dense+bge | 0.680 [0.61, 0.74] | 0.610 [0.55, 0.68] | 0.915 [0.88, 0.95] | 0.524 [0.47, 0.58] | 0.581 [0.53, 0.63] | 791 / 899 |
+
+### Paired differences vs the dense baseline (variant minus dense)
+
+| variant | set | any@5 | mrr | ndcg@10 |
+|---|---|---|---|---|
+| rrf | ExpertWritten | −0.050 [−0.110, +0.005], p 0.096 | −0.038, p 0.138 | **−0.042 [−0.083, −0.002], p 0.040** |
+| rrf | Simulated | −0.010, p 0.781 | +0.013, p 0.581 | +0.003, p 0.876 |
+| +minilm | ExpertWritten | −0.050 [−0.105, +0.005], p 0.105 | −0.047 [−0.099, +0.004], p 0.070 | −0.039 [−0.081, +0.000], p 0.051 |
+| +minilm | Simulated | −0.020, p 0.574 | +0.007, p 0.800 | +0.010, p 0.637 |
+| +bge | ExpertWritten | +0.010 [−0.040, +0.060], p 0.788 | +0.004, p 0.900 | +0.003, p 0.906 |
+| +bge | Simulated | −0.020, p 0.607 | +0.022, p 0.412 | +0.031 [−0.011, +0.074], p 0.154 |
+
+**Verdict: none of the three earns a place in the default config.**
+
+- **RRF** makes expert-question ranking measurably worse (nDCG@10 −0.042, p = 0.04). BM25 is the weaker
+  voter (any@5 0.54 vs 0.70 on Simulated), and RRF gives it an equal vote. This is the same lesson as the 2025 prototype.
+- **MiniLM** (a small reranker trained on web search) trends worse on expert questions and doubles latency.
+- **bge-reranker-v2-m3** is roughly neutral, with a small nDCG gain on Simulated that is within noise, at about 5.5× the latency.
+- The gap the reranker was meant to close is real: the gold article sits in the top 20 for 91.5–95.5% of questions
+  but in the top 5 for only 70–83%. Re-sorting 30 chunks with these off-the-shelf cross-encoders does not close it.
+  Open checks: how often the gold article is inside the 30 candidates at all; truncation at 512 tokens; and the candidate
+  count (30 is untested).
+
 ## Metric definitions
 
 - **recall_any@k**: share of questions with at least one gold article in the top k.

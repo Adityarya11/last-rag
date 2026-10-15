@@ -15,6 +15,7 @@ from .chunking import Chunker
 from .data import TextSource
 from .embed import embed_queries
 from .index import open_table
+from .rerank import rerank
 
 Method = Literal["bm25", "dense", "rrf"]
 METHODS: tuple[Method, ...] = ("bm25", "dense", "rrf")
@@ -22,6 +23,7 @@ METHODS: tuple[Method, ...] = ("bm25", "dense", "rrf")
 FETCH_CHUNKS = (
     200  # enough chunks to fill the top 20 articles even when several share one
 )
+RERANK_CANDIDATES = 30  # chunks the cross-encoder reads ("fetch 20-25, keep 5-10")
 
 
 @dataclass(frozen=True)
@@ -29,10 +31,12 @@ class RetrieverConfig:
     method: Method = "dense"
     chunker: Chunker = "section"
     source: TextSource = "html"
+    reranker: str = "off"  # "off" or a key of rerank.MODELS
 
     @property
     def name(self) -> str:
-        return f"{self.method}|{self.chunker}|{self.source}"
+        name = f"{self.method}|{self.chunker}|{self.source}"
+        return name if self.reranker == "off" else f"{name}+{self.reranker}"
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -48,6 +52,13 @@ class Retriever:
 
     def search(self, query: str) -> list[str]:
         """Article ids, best first."""
+        if self.config.reranker != "off":
+            # dense finds candidates, the cross-encoder re-sorts them; the rest of
+            # the dense ranking follows so the list stays long enough for recall@20
+            rows = self._dense_rows(query, RERANK_CANDIDATES)
+            top = _articles(rerank(self.config.reranker, query, rows))
+            rest = [a for a in self._dense(query) if a not in top]
+            return top + rest
         if self.config.method == "dense":
             return self._dense(query)
         if self.config.method == "bm25":
@@ -57,15 +68,17 @@ class Retriever:
         raise ValueError(f"unknown method: {self.config.method}")
 
     def _dense(self, query: str) -> list[str]:
+        return _articles(self._dense_rows(query, FETCH_CHUNKS))
+
+    def _dense_rows(self, query: str, limit: int) -> list[dict]:
         q = embed_queries([query])[0]
-        rows = (
+        return (
             self.table.search(q, vector_column_name="vector")
             .distance_type("cosine")
-            .limit(FETCH_CHUNKS)
-            .select(["article_id"])
+            .limit(limit)
+            .select(["article_id", "title", "text"])
             .to_list()
         )
-        return _articles(rows)
 
     def _bm25(self, query: str) -> list[str]:
         rows = (
