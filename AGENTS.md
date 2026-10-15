@@ -17,9 +17,9 @@ transfer blindly to messy enterprise data. The toggles are there to explore that
 
 ## Hard rules
 
-- **No private data, ever.** The HireSmart/AmberFlux FAQs are an undisclosed company
-  policy and must never enter this repo, in any form: no copies, no derived eval
-  sets, no quoted answers.
+- **No private data, ever.** The original internship company's FAQs are an
+  undisclosed company policy. They must never enter this repo in any form (no copies,
+  no derived eval sets, no quoted answers), and the company is never named.
 - **No LangChain / LangGraph / LlamaIndex.** Each stage is a plain Python function
   with a typed input and output, so it can be toggled, timed and tested alone. The 2025
   version broke mostly at framework glue: stale cached memory, sync calls inside async
@@ -32,28 +32,48 @@ transfer blindly to messy enterprise data. The toggles are there to explore that
 
 ## Machine notes (Windows 11, user's laptop)
 
-- **Disk space is tight.** C: has about 22 GB free, E: about 9 GB. Never put large
-  artifacts on C:.
-- Env vars already point caches off C:: `UV_CACHE_DIR=E:\AI\uv-cache`,
-  `HF_HOME=E:\AI\huggingface`, `UV_PYTHON_INSTALL_DIR=D:\Dev\uv\python`.
-  Keep the project on E: so uv can hardlink from its cache instead of copying.
+- **Disk space is tight.** C: has about 22 GB free, E: about 9 GB, D: about 29 GB. Never
+  put large artifacts on C:.
+- The project lives at `D:\coding\last-rag`. Caches go on D: too:
+  `UV_CACHE_DIR=D:\coding\.uv-cache`, `HF_HOME=D:\coding\.hf-cache`, so cache and
+  `.venv` share a drive and uv hardlinks instead of copying. A shell started before that
+  change still has the old E: paths, so export them explicitly in commands.
 - GPU: RTX 3050 Laptop, **4 GB VRAM**, driver CUDA 13.1, so use torch from the
   `cu130` index. Size models to fit: about 1 GB per 500M params in bf16, with headroom
   needed for batches.
-- Python 3.14 through uv. Shells are PowerShell (primary) and Git Bash.
+- Python 3.11.9 through uv. Shells are PowerShell (primary) and Git Bash.
+- `uv add` re-resolves against the PyTorch index and can take about 10 minutes. Run it in
+  the background, and use `uv run --no-sync` for everyday commands.
+- The user formats with ruff (88 columns). Match that style.
 - Ask before any install over about 1 GB, and say where it will land.
 
 ## Stack
 
-| Concern | Choice | Notes |
-|---|---|---|
-| Web | FastAPI + Jinja2 + HTMX | Server-rendered. No JS framework. |
-| Vector store | LanceDB (embedded) | Dense and full-text search in one place. Native hybrid search is one toggle; our own RRF is another. |
-| Embeddings | `google/embeddinggemma-2` | Apache-2.0, text-only path about 270M params, 768-d with Matryoshka 512/256/128 (re-normalize after truncating), 8k ctx. Query prompt `task: search result \| query: {q}`, doc prompt `title: {title} \| text: {body}`. **bf16 or fp32, never fp16** (NaNs). Load text modality only. Dims are a toggle. |
-| Reranker | local cross-encoder | Pick by benchmark. Candidates include `BAAI/bge-reranker-v2-m3`; check what's current and confirm it fits 4 GB. API rerankers (Voyage/Cohere) are optional comparison arms. |
-| LLM | Claude Haiku (cheap per-query work), Sonnet (final answer) | **Load the `claude-api` skill before writing any Claude call**, then confirm model IDs and pricing there, not from memory. Use prompt caching for the static system and context layers. |
-| Router | **Jev** (TypeSafe AI, early access) vs Claude Haiku | Jev is a non-generative "System One" model: you send a typed schema of questions and it returns typed answers with calibrated confidence, at a vendor-claimed 70–500 ms. API only. **Read docs.typesafe.ai before coding; the request schema is unknown so far.** Treat its speed and cost figures as vendor claims and measure them ourselves. |
-| Deps / env | uv | `pyproject.toml` pins the torch source to the `pytorch-cu130` index (explicit). |
+| Concern      | Choice                                                     | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web          | FastAPI + Jinja2 + HTMX                                    | Server-rendered. No JS framework.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Vector store | LanceDB (embedded)                                         | Dense and full-text search in one place. Native hybrid search is one toggle; our own RRF is another.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Embeddings   | `google/embeddinggemma-2`                                  | Apache-2.0, text-only path about 270M params, 768-d with Matryoshka 512/256/128 (re-normalize after truncating), 8k ctx. Query prompt `task: search result \| query: {q}`, doc prompt `title: {title} \| text: {body}`. **bf16 or fp32, never fp16** (NaNs). Load text-only with `config_kwargs={"vision_config": None, "audio_config": None}` (271M params, about 0.5 GB of VRAM). Its processor still imports Pillow and torchvision, so both are deps. `max_seq_length` comes unset, so we cap it at 2048 (`embed.MAX_TOKENS`); 16×1500-word docs already peak at 3.4 GB. A `QuestionAnswering` query prompt also exists and is a toggle candidate. Dims are a toggle. |
+| Reranker     | local cross-encoder                                        | Pick by benchmark. Candidates include `BAAI/bge-reranker-v2-m3`; check what's current and confirm it fits 4 GB. API rerankers (Voyage/Cohere) are optional comparison arms.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| LLM          | Claude Haiku (cheap per-query work), Sonnet (final answer) | **Load the `claude-api` skill before writing any Claude call**, then confirm model IDs and pricing there, not from memory. Use prompt caching for the static system and context layers.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Router       | **Jev** (TypeSafe AI, early access) vs Claude Haiku        | Jev is a non-generative "System One" model: you send a typed schema of questions and it returns typed answers with calibrated confidence, at a vendor-claimed 70–500 ms. API only. **Read docs.typesafe.ai before coding; the request schema is unknown so far.** Treat its speed and cost figures as vendor claims and measure them ourselves.                                                                                                                                                                                                                                                                                                                           |
+| Deps / env   | uv                                                         | `pyproject.toml` pins torch and torchvision to the `pytorch-cu130` index (explicit).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+
+## Code map
+
+- `lastrag/data.py`: `load_corpus()` and `load_qa(set)`. Rebuilds markdown from `html_content`,
+  because the dataset's `contents` field glues words and list items together
+  (`"invoice.In this"`). `article_ids` arrives either as a list or as a stringified list.
+- `lastrag/stats.py`: writes `reports/corpus_stats.md` (committable; public data).
+- `lastrag/chunking.py`: `article` | `section` chunkers.
+- `lastrag/embed.py`: model loader and cached document embeddings (`indexes/embeddings/*.npy`).
+- `lastrag/index.py`: one LanceDB table per (source, chunker), with vectors and a native BM25
+  index over title + text.
+- `lastrag/retrieve.py`: `RetrieverConfig` (method/chunker/source) to ranked article ids.
+  A chunk's article takes the rank of its best chunk.
+- `lastrag/metrics.py`: recall_any/all@k, MRR, nDCG@10, bootstrap CI, paired bootstrap.
+- `lastrag/evaluate.py`: runs the grid and writes `runs/retrieval/<set>/<config>.json`;
+  `--compare A B` gives a paired difference with a p-value.
 
 ## Dataset: WixQA (primary)
 
@@ -72,16 +92,17 @@ It is a real company's public help center, which is why it was chosen over a toy
 
 **Published baselines to beat** (FlashRAG, top-k=5, GPT-4o as judge):
 
-| Retriever | ExpertWritten context recall | Simulated context recall |
-|---|---|---|
-| BM25 | 0.73 | 0.55 |
-| E5-large-v2 | 0.81 | 0.67 |
+| Retriever   | ExpertWritten context recall | Simulated context recall |
+| ----------- | ---------------------------- | ------------------------ |
+| BM25        | 0.73                         | 0.55                     |
+| E5-large-v2 | 0.81                         | 0.67                     |
 
 Factuality was about 0.72–0.85, and token F1 0.21–0.43, depending on generator.
 Our judge differs from theirs (Claude, not GPT-4o), so say so whenever we compare.
 
 **Gaps we fill ourselves.** WixQA is single-turn and has no unanswerable queries, so we build an
 **adversarial / routing set** (Wix-grounded, generated, then hand-verified, stored in-repo):
+
 - out of scope ("what's the weather")
 - meta questions about the app ("what does this app do", "who built you")
 - ambiguous queries needing clarification ("it's not working")
