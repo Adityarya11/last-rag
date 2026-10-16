@@ -32,10 +32,13 @@ class RetrieverConfig:
     chunker: Chunker = "section"
     source: TextSource = "html"
     reranker: str = "off"  # "off" or a key of rerank.MODELS
+    no_requests: bool = False  # drop feature_request articles before ranking
 
     @property
     def name(self) -> str:
         name = f"{self.method}|{self.chunker}|{self.source}"
+        if self.no_requests:
+            name += "-noreq"
         return name if self.reranker == "off" else f"{name}+{self.reranker}"
 
     def as_dict(self) -> dict:
@@ -67,13 +70,19 @@ class Retriever:
             return rrf([self._bm25(query), self._dense(query)])
         raise ValueError(f"unknown method: {self.config.method}")
 
+    def _filter(self, search):
+        """Apply the article_type filter before ranking, so top-k is not wasted."""
+        if self.config.no_requests:
+            return search.where("article_type != 'feature_request'", prefilter=True)
+        return search
+
     def _dense(self, query: str) -> list[str]:
         return _articles(self._dense_rows(query, FETCH_CHUNKS))
 
     def _dense_rows(self, query: str, limit: int) -> list[dict]:
         q = embed_queries([query])[0]
         return (
-            self.table.search(q, vector_column_name="vector")
+            self._filter(self.table.search(q, vector_column_name="vector"))
             .distance_type("cosine")
             .limit(limit)
             .select(["article_id", "title", "text"])
@@ -82,7 +91,9 @@ class Retriever:
 
     def _bm25(self, query: str) -> list[str]:
         rows = (
-            self.table.search(query, query_type="fts", fts_columns="search_text")
+            self._filter(
+                self.table.search(query, query_type="fts", fts_columns="search_text")
+            )
             .limit(FETCH_CHUNKS)
             .select(["article_id"])
             .to_list()

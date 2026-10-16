@@ -111,6 +111,28 @@ then append the rest of the dense ranking. Latencies are p50 / p95 per query on 
   Open checks: how often the gold article is inside the 30 candidates at all; truncation at 512 tokens; and the candidate
   count (30 is untested).
 
+### Follow-up: is it the feature-request articles?
+
+Diagnosis (`python -m lastrag.diagnose`, MiniLM on ExpertWritten): the gold article is inside dense's top 30 chunks for
+95.5% of questions, so the candidates are not the limit. Of those, MiniLM moved the gold article down for 72
+questions, left 71 unchanged and moved it up for 48. Several of its #1 picks were feature-request articles
+("Wix X Request: ...") whose titles repeat the question's words, so we tested removing them
+(`no_requests`, a LanceDB pre-filter on `article_type`). Feature requests are 33% of the corpus but only 3 of 258
+ExpertWritten gold labels and 7 of 230 Simulated ones. (The synthetic set cannot be used to tune this filter:
+a third of its gold articles are feature requests.)
+
+| variant (vs plain dense, paired) | ExpertWritten any@5 | ExpertWritten ndcg@10 | Simulated any@5 | p50 ms |
+|---|---|---|---|---|
+| dense + filter | +0.010, p 0.54 | +0.009, p 0.29 | +0.015, p 0.33 | 175 |
+| dense + filter + minilm | −0.050, p 0.11 | **−0.043, p 0.043** | −0.015, p 0.68 | 439 |
+| dense + filter + bge | +0.005, p 0.93 | +0.007, p 0.76 | −0.015, p 0.71 | 928 |
+
+**Result: the filter alone is neutral and does not rescue the rerankers.** Feature requests were part of the
+story in individual examples but are not the cause. The latency of the filtered runs is higher than the
+unfiltered baseline (175 vs 123 ms p50); that was measured in separate sessions, so treat it as unconfirmed.
+Reranking stays off by default. Untested ideas: reranking at article level instead of per-section chunk;
+more candidates; a reranker fine-tuned on this kind of data.
+
 ## Metric definitions
 
 - **recall_any@k**: share of questions with at least one gold article in the top k.

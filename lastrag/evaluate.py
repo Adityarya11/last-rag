@@ -110,6 +110,7 @@ def main() -> None:
     ap.add_argument("--source", nargs="+", default=["contents", "html"])
     ap.add_argument("--qa", nargs="+", default=list(EVAL_SETS))
     ap.add_argument("--reranker", nargs="+", default=["off"])
+    ap.add_argument("--no-requests", nargs="+", type=int, default=[0], help="0 and/or 1")
     ap.add_argument("--compare", nargs=2, metavar=("A", "B"))
     args = ap.parse_args()
 
@@ -120,9 +121,11 @@ def main() -> None:
 
     for qa_set in args.qa:
         runs = [
-            evaluate(RetrieverConfig(method, chunker, source, reranker), qa_set)
-            for method, chunker, source, reranker in itertools.product(
-                args.method, args.chunker, args.source, args.reranker
+            evaluate(
+                RetrieverConfig(method, chunker, source, reranker, bool(no_req)), qa_set
+            )
+            for method, chunker, source, reranker, no_req in itertools.product(
+                args.method, args.chunker, args.source, args.reranker, args.no_requests
             )
         ]
         print(f"\n## {qa_set} ({runs[0]['n_queries']} queries)\n")
