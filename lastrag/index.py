@@ -1,9 +1,4 @@
-"""LanceDB tables: one per (text source, chunker), holding vectors and a BM25 index.
-
-The table stores chunk text, the article it came from, and the full 768-d vector.
-The full-text index covers `search_text` = title + chunk, so BM25 sees the same
-title that the embedding model gets through its "title: ... | text: ..." prefix.
-"""
+"""LanceDB tables: one per (text source, chunker), holding vectors and a BM25 index."""
 
 from __future__ import annotations
 

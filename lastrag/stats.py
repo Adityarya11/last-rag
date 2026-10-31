@@ -1,7 +1,4 @@
-"""Corpus and QA-set statistics for WixQA. These numbers drive the chunking choices.
-
-uv run python -m lastrag.stats          # prints and writes reports/corpus_stats.md
-"""
+"""Corpus and QA-set statistics for WixQA. These numbers drive the chunking choices."""
 
 from __future__ import annotations
 

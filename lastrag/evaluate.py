@@ -1,12 +1,8 @@
 """Run retrieval configs over WixQA query sets and save every run.
 
-    uv run python -m lastrag.evaluate                              # default grid
-    uv run python -m lastrag.evaluate --method dense --chunker section --source html
-    uv run python -m lastrag.evaluate --compare "bm25|article|contents" "dense|section|html"
-
-Each (config, query set) is saved to runs/retrieval/<set>/<config>.json with the
-config, git commit, metric means + 95% CIs, and per-query ranks and latencies.
-The metrics page and the README read ONLY from these files.
+uv run python -m lastrag.evaluate                              # default grid
+uv run python -m lastrag.evaluate --method dense --chunker section --source html
+uv run python -m lastrag.evaluate --compare "bm25|article|contents" "dense|section|html"
 """
 
 from __future__ import annotations
@@ -17,7 +13,7 @@ import json
 import statistics
 import subprocess
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .chunking import CHUNKERS
@@ -37,9 +33,17 @@ def run_path(qa_set: str, config_name: str) -> Path:
 def git_sha() -> str:
     try:
         out = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True
+            ["git", "rev-parse", "--short", "HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
         )
-        dirty = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
         return out.stdout.strip() + ("-dirty" if dirty.stdout.strip() else "")
     except OSError:
         return "unknown"
@@ -55,8 +59,20 @@ def evaluate(config: RetrieverConfig, qa_set: str) -> dict:
         ranked = retriever.search(q.question)
         ms = (time.perf_counter() - t) * 1000
         m = per_query(ranked, q.gold)
-        rows.append({"question": q.question, "gold": list(q.gold), "top5": ranked[:5], "ms": ms, **m})
-    names = [f"recall_any@{k}" for k in KS] + [f"recall_all@{k}" for k in KS] + ["mrr", "ndcg@10"]
+        rows.append(
+            {
+                "question": q.question,
+                "gold": list(q.gold),
+                "top5": ranked[:5],
+                "ms": ms,
+                **m,
+            }
+        )
+    names = (
+        [f"recall_any@{k}" for k in KS]
+        + [f"recall_all@{k}" for k in KS]
+        + ["mrr", "ndcg@10"]
+    )
     lat = sorted(r["ms"] for r in rows)
     run = {
         "config": config.as_dict(),
@@ -64,14 +80,19 @@ def evaluate(config: RetrieverConfig, qa_set: str) -> dict:
         "qa_set": qa_set,
         "n_queries": len(rows),
         "git": git_sha(),
-        "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "created": datetime.now(UTC).isoformat(timespec="seconds"),
         "metrics": summarize(rows, names),
         "latency_ms": {
             "p50": statistics.median(lat),
             "p95": lat[int(0.95 * (len(lat) - 1))],
         },
         "queries": [
-            {**r, "first_gold_rank": None if r["first_gold_rank"] == float("inf") else r["first_gold_rank"]}
+            {
+                **r,
+                "first_gold_rank": None
+                if r["first_gold_rank"] == float("inf")
+                else r["first_gold_rank"],
+            }
             for r in rows
         ],
     }
@@ -89,17 +110,27 @@ def table(runs: list[dict]) -> str:
             f"{r['metrics'][m]['mean']:.3f} [{r['metrics'][m]['lo']:.2f}, {r['metrics'][m]['hi']:.2f}]"
             for m in HEADLINE
         ]
-        lines.append(f"| {r['config_name']} | " + " | ".join(cells) + f" | {r['latency_ms']['p50']:.0f} |")
+        lines.append(
+            f"| {r['config_name']} | "
+            + " | ".join(cells)
+            + f" | {r['latency_ms']['p50']:.0f} |"
+        )
     return "\n".join(lines)
 
 
 def compare(a_name: str, b_name: str, qa_set: str) -> str:
     a = json.loads(run_path(qa_set, a_name).read_text(encoding="utf-8"))
     b = json.loads(run_path(qa_set, b_name).read_text(encoding="utf-8"))
-    out = [f"{qa_set}: {b_name}  minus  {a_name}", "| metric | diff | 95% CI | p |", "|---|---|---|---|"]
+    out = [
+        f"{qa_set}: {b_name}  minus  {a_name}",
+        "| metric | diff | 95% CI | p |",
+        "|---|---|---|---|",
+    ]
     for m in HEADLINE:
         d = paired_bootstrap([q[m] for q in a["queries"]], [q[m] for q in b["queries"]])
-        out.append(f"| {m} | {d['diff']:+.3f} | [{d['lo']:+.3f}, {d['hi']:+.3f}] | {d['p']:.3f} |")
+        out.append(
+            f"| {m} | {d['diff']:+.3f} | [{d['lo']:+.3f}, {d['hi']:+.3f}] | {d['p']:.3f} |"
+        )
     return "\n".join(out)
 
 
@@ -110,7 +141,9 @@ def main() -> None:
     ap.add_argument("--source", nargs="+", default=["contents", "html"])
     ap.add_argument("--qa", nargs="+", default=list(EVAL_SETS))
     ap.add_argument("--reranker", nargs="+", default=["off"])
-    ap.add_argument("--no-requests", nargs="+", type=int, default=[0], help="0 and/or 1")
+    ap.add_argument(
+        "--no-requests", nargs="+", type=int, default=[0], help="0 and/or 1"
+    )
     ap.add_argument("--compare", nargs=2, metavar=("A", "B"))
     args = ap.parse_args()
 

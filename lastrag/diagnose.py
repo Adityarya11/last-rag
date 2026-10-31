@@ -1,11 +1,9 @@
-"""Why did a reranker not help? Look inside the candidates instead of at averages.
-
-    uv run python -m lastrag.diagnose --reranker minilm --qa expertwritten
-
-For each question: take dense's top chunks, check whether the gold article is among
-them (the reranker's ceiling), re-sort the first 30 with the cross-encoder, and
-compare the gold article's rank before and after.
-"""
+# This answers "Why did a re-ranker not help?",
+#
+#  uv run python -m lastrag.diagnose --reranker minilm --qa expertwritten
+#
+# For each question: take dense's top chunks, check whether the gold article is among them (the re-ranker's ceiling),
+# sort the first 30 with the cross-encoder, and then compare the gold article's rank brfore and after.
 
 from __future__ import annotations
 
@@ -67,19 +65,25 @@ def main() -> None:
             outcome["unchanged"] += 1
 
         gold_chunk = next(r for r in cands if r["article_id"] in q.gold)
-        n_tok = len(tok(q.question, f"{gold_chunk['title']}\n{gold_chunk['text']}")["input_ids"])
+        n_tok = len(
+            tok(q.question, f"{gold_chunk['title']}\n{gold_chunk['text']}")["input_ids"]
+        )
         trunc_gold.append(n_tok)
 
     print(f"\n## {args.qa} ({n} questions), reranker = {args.reranker}\n")
     print("Gold article inside dense's top-K chunks (the reranker's ceiling):")
     for k in (10, 30, 50, 100):
         print(f"  K={k:<3} {in_cands[k] / n:.3f}")
-    print(f"\nTop-5 hit: dense {top5['dense'] / n:.3f} -> reranked {top5['reranked'] / n:.3f}")
+    print(
+        f"\nTop-5 hit: dense {top5['dense'] / n:.3f} -> reranked {top5['reranked'] / n:.3f}"
+    )
     print("\nWhat the reranker did to the gold article's rank:")
     for k, v in outcome.most_common():
         print(f"  {k:<28} {v:>4}")
     over = sum(t > 512 for t in trunc_gold)
-    print(f"\nGold chunks cut off at 512 tokens: {over}/{len(trunc_gold)} (max {max(trunc_gold)})")
+    print(
+        f"\nGold chunks cut off at 512 tokens: {over}/{len(trunc_gold)} (max {max(trunc_gold)})"
+    )
 
     titles = {}
     for r in (r for _, _, _, _, cands in fails for r in cands):
@@ -87,7 +91,9 @@ def main() -> None:
     print(f"\nWorst {args.show} cases where the reranker buried the gold article:")
     for drop, q, before, after, _ in sorted(fails, key=lambda f: -f[0])[: args.show]:
         print(f"\n  Q: {q.question[:150]}")
-        print(f"  gold: {[titles.get(g, g[:8]) for g in q.gold]}  rank {first_rank(before, q.gold)} -> {first_rank(after, q.gold)}")
+        print(
+            f"  gold: {[titles.get(g, g[:8]) for g in q.gold]}  rank {first_rank(before, q.gold)} -> {first_rank(after, q.gold)}"
+        )
         print(f"  reranker's #1: {titles[after[0]]}")
 
 

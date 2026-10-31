@@ -36,9 +36,21 @@ def test_paired_bootstrap_sees_a_clear_win():
 
 
 def test_sections_merge_small_and_cap_large():
-    body = "Intro " * 10 + "\n## A\n" + "a " * 50 + "\n## B\n" + "b " * 5 + "\n## C\n" + "line\n" * 900
+    body = (
+        "Intro " * 10
+        + "\n## A\n"
+        + "a " * 50
+        + "\n## B\n"
+        + "b " * 5
+        + "\n## C\n"
+        + "line\n" * 900
+    )
     chunks = split_sections(body)
-    assert chunks[0].startswith("Intro") and "## A" in chunks[0]  # 10-word intro merged forward
+    assert (
+        chunks[0].startswith("Intro") and "## A" in chunks[0]
+    )  # 10-word intro merged forward
     assert "## B" in chunks[1] and "## C" in chunks[1]  # 5-word section merged forward
     assert all(len(c.split()) <= MAX_WORDS + 3 for c in chunks)
-    assert all(c.startswith("## ") for c in chunks[1:])  # split pieces repeat the heading
+    assert all(
+        c.startswith("## ") for c in chunks[1:]
+    )  # split pieces repeat the heading

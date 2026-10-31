@@ -1,11 +1,4 @@
-"""embeddinggemma-2 (text-only), with document embeddings cached on disk.
-
-Model card rules followed here:
-  - bf16 or fp32, never fp16 (fp16 silently returns NaN / degraded vectors)
-  - queries:   "task: search result | query: {q}"   (prompt "SearchQuery")
-  - documents: "title: {title} | text: {body}"     (formatted by hand)
-  - Matryoshka truncation to 512/256/128 must be re-normalised (encode() does it)
-"""
+"""embeddinggemma-2 (text-only), with document embeddings cached on disk."""
 
 from __future__ import annotations
 

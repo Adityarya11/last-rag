@@ -1,9 +1,4 @@
-"""Split articles into the units we index and retrieve.
-
-article  - one chunk per article (the WixQA paper's setup)
-section  - split at ## / ### headings; tiny sections merge forward, huge ones
-           split at line boundaries so no chunk exceeds MAX_WORDS
-"""
+"""Split articles into the units for indexing and retrieving."""
 
 from __future__ import annotations
 

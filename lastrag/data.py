@@ -1,13 +1,4 @@
-"""Load WixQA: the Wix help-center corpus and its three QA sets.
-
-Source: Hugging Face `Wix/WixQA` (MIT, cite "Wix.com AI Research", arXiv 2505.08643).
-
-The corpus `contents` field (what the paper's baselines use) is flattened text where
-headings and list items run into each other: "...the invoice.In this article, learn
-more about:\nEnabling auto-conversion Manually converting...". We rebuild clean
-markdown from `html_content` instead. `Article.text(source)` picks which one, so the
-difference is a toggle we can measure.
-"""
+"""Loading WixQA: the Wix help-center corpus and its three QA sets."""
 
 from __future__ import annotations
 

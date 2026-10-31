@@ -1,9 +1,4 @@
-"""Cross-encoder rerankers: score (question, chunk) pairs read together.
-
-Dense search compares two vectors made separately; a cross-encoder reads the
-question and the chunk as one input, so it is more precise but too slow to run on
-the whole corpus. It only re-sorts the top candidates dense search already found.
-"""
+"""Cross-encoder rerankers: for scoring (question, chunk) pairs read together."""
 
 from __future__ import annotations
 

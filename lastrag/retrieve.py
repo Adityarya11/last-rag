@@ -1,8 +1,4 @@
-"""Retrievers: query in, ranked article ids out.
-
-Search runs over chunks; a chunk's article takes the rank of its best chunk, so a
-query is scored on which ARTICLES it found (that is what WixQA's gold labels name).
-"""
+"""Retrievers: query in, ranked article ids out."""
 
 from __future__ import annotations
 
