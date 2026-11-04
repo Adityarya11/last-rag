@@ -133,6 +133,86 @@ unfiltered baseline (175 vs 123 ms p50); that was measured in separate sessions,
 Reranking stays off by default. Untested ideas: reranking at article level instead of per-section chunk;
 more candidates; a reranker fine-tuned on this kind of data.
 
+## Step 4b: contextual retrieval
+
+For every `section` chunk (19,796 of them) `claude-haiku-5-5` wrote a 1-2 sentence note placing the chunk in its
+article (`lastrag/contextual.py`, prompt `v1`, thinking off, the article as a cached prompt prefix). The note is put
+in front of the chunk before it is embedded and BM25-indexed (`indexed_texts` in `index.py`); the stored `text`
+column stays the original chunk. The tables are separate (`html_section_ctx`), and configs carry a `-ctx` suffix.
+
+**Generation cost.** 19,796 calls, 0 failures, $2.35 in total (input side $1.53, output $0.83), with 68.5% of
+prompt tokens read from the prompt cache. A 35-chunk sample had predicted $2.32. The notes have a median of 42 words
+(p95 54, max 80); the prompt asked for 1-2 sentences, so they are longer than that wording suggests.
+
+**Paired differences (with context minus without), 200 queries per set.** Each cell is the difference with its 95%
+bootstrap interval.
+
+| retriever | set | any@5 (without → with) | recall_any@5 | recall_all@5 | MRR | nDCG@10 |
+|---|---|---|---|---|---|---|
+| dense | ExpertWritten | 0.830 → 0.790 | −0.040 [−0.090, +0.005] | **−0.050 [−0.095, −0.005], p 0.035** | −0.007 [−0.046, +0.031] | −0.019 [−0.049, +0.012] |
+| dense | Simulated | 0.700 → 0.700 | +0.000 [−0.035, +0.035] | +0.005 [−0.030, +0.040] | +0.016 [−0.019, +0.053] | +0.026 [−0.003, +0.056] |
+| bm25 | ExpertWritten | 0.595 → 0.585 | −0.010 [−0.055, +0.035] | −0.010 [−0.055, +0.035] | **+0.025 [+0.001, +0.051], p 0.043** | +0.020 [−0.001, +0.041] |
+| bm25 | Simulated | 0.540 → 0.525 | −0.015 [−0.045, +0.015] | −0.010 [−0.045, +0.025] | −0.000 [−0.022, +0.022] | −0.006 [−0.026, +0.014] |
+| rrf | ExpertWritten | 0.780 → 0.795 | +0.015 [−0.030, +0.060] | −0.005 [−0.045, +0.035] | +0.011 [−0.017, +0.038] | +0.016 [−0.006, +0.037] |
+| rrf | Simulated | 0.690 → 0.675 | −0.015 [−0.060, +0.030] | −0.015 [−0.065, +0.035] | −0.009 [−0.039, +0.020] | +0.001 [−0.025, +0.026] |
+
+recall_any@20 differences are all within ±0.02 (full output: `python -m lastrag.evaluate --compare A B`).
+
+**Result: no detectable effect, and nothing here goes into the default config.**
+
+- Of 30 paired comparisons (3 retrievers × 2 sets × 5 metrics), 2 have p < 0.05, and they point in opposite
+  directions (dense ExpertWritten recall_all@5 worse, bm25 ExpertWritten MRR better). With 30 tests about 1.5 such
+  results are expected by chance, and neither survives a multiple-comparison correction (0.05 / 30 ≈ 0.0017). The
+  metrics are correlated, so the 30 are not independent, but the conclusion is the same.
+- "No detectable effect" is not "no effect". The intervals are about ±0.04-0.05 wide on recall@5, so gains above
+  roughly +0.06 are ruled out and smaller ones are not. recall_any@20 is already 0.90-0.95, which leaves little room.
+- Untested explanations: the title is already part of the embedded text (`title: ... | text: ...`) and section chunks
+  already begin with their heading, so the note may add little the retriever did not have. A title ablation
+  (no title / title / title + note) would test it.
+- Latency: p50 with context was higher in every pair (dense 225 vs 123 ms on ExpertWritten, 219 vs 146 on Simulated;
+  bm25 8-9 vs 5-6 ms; rrf 203-207 vs 163-166 ms). The no-title arms in Step 4c, which carry no notes at all, show
+  the same gap (dense 231 and 250 ms), so the notes are not the cause. The original baseline was measured in a
+  different session (git `20ad595-dirty`); until it is re-run back to back with the others, latency differences between
+  these rows are unconfirmed.
+
+## Step 4c: is the title doing the note's job?
+
+The embedded text of every chunk is `title: <article title> | text: <chunk>`. To see whether the generated note
+added anything the title did not already give, two more index variants were built: the same chunks with the title
+left out, with and without the note (`-notitle`, `-ctx-notitle`). Dense and BM25, both sets, 200 queries each.
+Differences are B minus A with 95% bootstrap intervals; `*` marks p < 0.05.
+
+**Dense, ExpertWritten**
+
+| comparison (A → B) | recall_any@5 | MRR | nDCG@10 |
+|---|---|---|---|
+| title → no title | −0.105 [−0.155, −0.060]* | −0.124 [−0.162, −0.086]* | −0.119 [−0.152, −0.086]* |
+| no title → no title + note | +0.075 [+0.015, +0.135]* | +0.096 [+0.052, +0.140]* | +0.086 [+0.048, +0.123]* |
+| title → title + note | −0.040 [−0.090, +0.005] | −0.007 [−0.046, +0.031] | −0.019 [−0.049, +0.012] |
+| title + note → note only | +0.010 [−0.035, +0.055] | −0.020 [−0.057, +0.016] | −0.014 [−0.042, +0.014] |
+
+**Dense, Simulated**
+
+| comparison (A → B) | recall_any@20 | MRR | nDCG@10 |
+|---|---|---|---|
+| title → no title | −0.065 [−0.105, −0.030]* | −0.059 [−0.099, −0.020]* | −0.050 [−0.086, −0.016]* |
+| no title → no title + note | +0.065 [+0.030, +0.105]* | +0.028 [−0.016, +0.072] | +0.028 [−0.010, +0.066] |
+| title → title + note | −0.015 [−0.045, +0.015] | +0.016 [−0.019, +0.053] | +0.026 [−0.003, +0.056] |
+| title + note → note only | +0.015 [−0.010, +0.040] | −0.047 [−0.083, −0.012]* | −0.048 [−0.077, −0.020]* |
+
+BM25 shows the same direction (title → no title: nDCG@10 −0.032 on ExpertWritten, −0.036 on Simulated, both with
+p < 0.05); its other differences are small and mostly inside their intervals.
+
+**Result.** The title carries real signal for dense retrieval, and the note replaces most of it when the title is
+missing, but adds nothing on top of the title. That explains Step 4b: on this corpus the article titles already say what
+the note says. It also suggests when the note would earn its cost: on documents with missing or uninformative titles.
+That is a hypothesis for other data, not something these runs test.
+
+Cautions: this step adds about 64 more paired comparisons, so isolated p-values just under 0.05 (for example BM25
+ExpertWritten MRR, +0.033) should not be quoted; the large, consistent effects (dropping the title for dense) are
+not at risk from that. The `-notitle` runs are labelled `-dirty` in their `git` field because they were run before
+the code was committed.
+
 ## Metric definitions
 
 - **recall_any@k**: share of questions with at least one gold article in the top k.
