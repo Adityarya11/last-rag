@@ -144,7 +144,9 @@ def main() -> None:
     ap.add_argument(
         "--no-requests", nargs="+", type=int, default=[0], help="0 and/or 1"
     )
+    ap.add_argument("--contextual", nargs="+", type=int, default=[0], help="0 and 1")
     ap.add_argument("--compare", nargs=2, metavar=("A", "B"))
+
     args = ap.parse_args()
 
     if args.compare:
@@ -155,12 +157,26 @@ def main() -> None:
     for qa_set in args.qa:
         runs = [
             evaluate(
-                RetrieverConfig(method, chunker, source, reranker, bool(no_req)), qa_set
+                RetrieverConfig(
+                    method=method,
+                    chunker=chunker,
+                    source=source,
+                    reranker=reranker,
+                    no_requests=bool(no_req),
+                    contextual=bool(ctx),
+                ),
+                qa_set,
             )
-            for method, chunker, source, reranker, no_req in itertools.product(
-                args.method, args.chunker, args.source, args.reranker, args.no_requests
+            for method, chunker, source, reranker, no_req, ctx in itertools.product(
+                args.method,
+                args.chunker,
+                args.source,
+                args.reranker,
+                args.no_requests,
+                args.contextual,
             )
         ]
+
         print(f"\n## {qa_set} ({runs[0]['n_queries']} queries)\n")
         print(table(runs))
 

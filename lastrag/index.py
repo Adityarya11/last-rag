@@ -7,26 +7,50 @@ from pathlib import Path
 import lancedb
 import pyarrow as pa
 
-from .chunking import Chunker, chunk_corpus
+from .chunking import Chunk, Chunker, chunk_corpus
+from .contextual import load_cache, with_context
 from .data import TextSource, load_corpus
 from .embed import doc_text, embed_docs
 
 DB_PATH = Path(__file__).resolve().parent.parent / "indexes" / "lancedb"
 
 
-def table_name(source: TextSource, chunker: Chunker) -> str:
-    return f"{source}_{chunker}"
+def table_name(source: TextSource, chunker: Chunker, contextual: bool = False) -> str:
+    name = f"{source}_{chunker}"
+    return f"{name}_ctx" if contextual else name
 
 
-def open_table(source: TextSource, chunker: Chunker, rebuild: bool = False):
+def indexed_texts(chunks: list[Chunk], contexts: dict[str, str] | None) -> list[str]:
+    """The text each chunk is embedded and BM25-indexed on.
+
+    Without contexts it is the chunk itself. With them, the generated note goes in
+    front; a chunk with no context raises KeyError instead of being indexed bare.
+    """
+    if contexts is None:
+        return [c.text for c in chunks]
+    return [with_context(c, contexts) for c in chunks]
+
+
+def open_table(
+    source: TextSource,
+    chunker: Chunker,
+    rebuild: bool = False,
+    contextual: bool = False,
+):
     db = lancedb.connect(DB_PATH)
-    name = table_name(source, chunker)
+    name = table_name(source, chunker, contextual)
     if not rebuild and name in db.list_tables().tables:
         return db.open_table(name)
 
     chunks = chunk_corpus(load_corpus(), chunker, source)
+    contexts = (
+        {chunk_id: r["context"] for chunk_id, r in load_cache().items()}
+        if contextual
+        else None
+    )
+    texts = indexed_texts(chunks, contexts)
     print(f"building {name}: {len(chunks):,} chunks")
-    vecs = embed_docs([doc_text(c.title, c.text) for c in chunks])
+    vecs = embed_docs([doc_text(c.title, t) for c, t in zip(chunks, texts)])
     data = pa.table(
         {
             "chunk_id": [c.id for c in chunks],
@@ -34,7 +58,7 @@ def open_table(source: TextSource, chunker: Chunker, rebuild: bool = False):
             "article_type": [c.article_type for c in chunks],
             "title": [c.title for c in chunks],
             "text": [c.text for c in chunks],
-            "search_text": [f"{c.title}\n{c.text}" for c in chunks],
+            "search_text": [f"{c.title}\n{t}" for c, t in zip(chunks, texts)],
             "vector": pa.FixedSizeListArray.from_arrays(
                 pa.array(vecs.ravel(), type=pa.float32()), vecs.shape[1]
             ),

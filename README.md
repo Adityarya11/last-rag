@@ -1,4 +1,8 @@
-# last-
+# last-rag
+
+so the whole idea is, as we move to the next level of the rag, we try each of the ways, the known cheap ways and the best possible ways, one can
+implement in the RAG architecture and then we check everything setting a benchmark for the new people and yeah like said, no method is better,
+its all about the use-case and stuff..
 
 ## Disclaimer
 
