@@ -145,6 +145,7 @@ def main() -> None:
         "--no-requests", nargs="+", type=int, default=[0], help="0 and/or 1"
     )
     ap.add_argument("--contextual", nargs="+", type=int, default=[0], help="0 and 1")
+    ap.add_argument("--title", nargs="+", type=int, default=[1], help="0 and/or 1")
     ap.add_argument("--compare", nargs=2, metavar=("A", "B"))
 
     args = ap.parse_args()
@@ -164,16 +165,26 @@ def main() -> None:
                     reranker=reranker,
                     no_requests=bool(no_req),
                     contextual=bool(ctx),
+                    title=bool(title),
                 ),
                 qa_set,
             )
-            for method, chunker, source, reranker, no_req, ctx in itertools.product(
+            for (
+                method,
+                chunker,
+                source,
+                reranker,
+                no_req,
+                ctx,
+                title,
+            ) in itertools.product(
                 args.method,
                 args.chunker,
                 args.source,
                 args.reranker,
                 args.no_requests,
                 args.contextual,
+                args.title,
             )
         ]
 

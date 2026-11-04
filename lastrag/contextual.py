@@ -82,7 +82,7 @@ def situate(client: anthropic.Anthropic, article: Article, chunk: Chunk) -> dict
     if not text:
         raise BadContext("empty answer")
     if len(text.split()) > MAX_CONTEXT_WORDS:
-        raise BadContext("Too Long")
+        raise BadContext("too long")
 
     u = response.usage
     return {
@@ -142,7 +142,7 @@ def contextualise(
 
 # helper function for situate with retries.
 def _situate_with_retries(client, article, chunk) -> dict | None:
-    """A validated result, or none if couldnt be done."""
+    """A validated result, or None if this chunk could not be done."""
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             return situate(client, article, chunk)
@@ -188,17 +188,21 @@ def usage_report(records: list[dict], scale: float = 1.0) -> str:
     prompt_tokens = t["input"] + t["cache_read"] + t["cache_write"]
     lines = [
         f"calls: {len(records):,}",
-        f"tokens: input {t['input']:,} | cache write {t['cache_write']:,} | ",
-        f"cache read {t['cache_read']:,} | output {t['output']:,}",
-        "share of prompt tokens read from cache: ",
-        f"{t['cache_read'] / max(prompt_tokens, 1):.1%}",
+        (
+            f"tokens: input {t['input']:,} | cache write {t['cache_write']:,} | "
+            f"cache read {t['cache_read']:,} | output {t['output']:,}"
+        ),
+        (
+            "share of prompt tokens read from cache: "
+            f"{t['cache_read'] / max(prompt_tokens, 1):.1%}"
+        ),
         f"input-side cost: ${input_usd:.4f}",
     ]
 
     if output_usd is None:
-        lines.append("output cost: set OUTPUT_CACHE to compute")
+        lines.append("output cost: set OUTPUT_PRICE to compute")
     else:
-        lines.append(f"total cost: ${input_usd + output_usd: .4f}")
+        lines.append(f"total cost: ${input_usd + output_usd:.4f}")
         if scale != 1.0:
             total = (input_usd + output_usd) * scale
             lines.append(f"estimated full corpus (x{scale:.1f}): ${total:.2f}")
@@ -225,7 +229,7 @@ def main():
 
     contexts = contextualise(chunks, articles, args.workers)
     missing = [c for c in chunks if c.id not in contexts]
-    print(f"{len(missing)} chunks were failed and were not cached")
+    print(f"{len(missing)} chunks failed and were not cached")
     cache = load_cache()
     records = [cache[c.id] for c in chunks if c.id in cache]
     print(f"\n{len(contexts):,} / {len(chunks):,} chunks have a context\n")

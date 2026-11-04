@@ -20,6 +20,8 @@ KS = (1, 5, 10, 20)
 
 def per_query(ranked: list[str], gold: tuple[str, ...]) -> dict[str, float]:
     gold_set = set(gold)
+    if not gold_set:
+        raise ValueError("a query with no gold articles cannot be scored")
     pos = {a: i for i, a in enumerate(ranked)}
     gold_ranks = sorted(pos[g] + 1 for g in gold_set if g in pos)
     out: dict[str, float] = {}

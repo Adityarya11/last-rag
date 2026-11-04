@@ -30,6 +30,7 @@ class RetrieverConfig:
     reranker: str = "off"  # "off" or a key of rerank.MODELS
     no_requests: bool = False  # drop feature_request articles before ranking
     contextual: bool = False  # for the LLM based context
+    title: bool = True  # False: leave the title out of the embedded / BM25 text
 
     @property
     def name(self) -> str:
@@ -38,6 +39,8 @@ class RetrieverConfig:
             name += "-noreq"
         if self.contextual:
             name += "-ctx"
+        if not self.title:
+            name += "-notitle"
         return name if self.reranker == "off" else f"{name}+{self.reranker}"
 
     def as_dict(self) -> dict:
@@ -51,7 +54,10 @@ class Retriever:
     @cached_property
     def table(self):
         return open_table(
-            self.config.source, self.config.chunker, contextual=self.config.contextual
+            self.config.source,
+            self.config.chunker,
+            contextual=self.config.contextual,
+            title=self.config.title,
         )
 
     def search(self, query: str) -> list[str]:

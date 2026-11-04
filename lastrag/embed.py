@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 
 MODEL = "google/embeddinggemma-2"
-MAX_TOKENS = 2048  # the model allows 8k, but for 4 GB of VRAM its optimal
+MAX_TOKENS = 2048  # the model allows 8k; this is what fits in 4 GB of VRAM
 CACHE = Path(__file__).resolve().parent.parent / "indexes" / "embeddings"
 
 

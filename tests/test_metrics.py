@@ -1,5 +1,7 @@
 import math
 
+import pytest
+
 from lastrag.chunking import MAX_WORDS, split_sections
 from lastrag.metrics import bootstrap_ci, paired_bootstrap, per_query
 
@@ -54,3 +56,8 @@ def test_sections_merge_small_and_cap_large():
     assert all(
         c.startswith("## ") for c in chunks[1:]
     )  # split pieces repeat the heading
+
+
+def test_query_without_gold_articles_is_rejected():
+    with pytest.raises(ValueError):
+        per_query(["x"], ())

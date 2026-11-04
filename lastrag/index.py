@@ -15,9 +15,15 @@ from .embed import doc_text, embed_docs
 DB_PATH = Path(__file__).resolve().parent.parent / "indexes" / "lancedb"
 
 
-def table_name(source: TextSource, chunker: Chunker, contextual: bool = False) -> str:
+def table_name(
+    source: TextSource, chunker: Chunker, contextual: bool = False, title: bool = True
+) -> str:
     name = f"{source}_{chunker}"
-    return f"{name}_ctx" if contextual else name
+    if contextual:
+        name += "_ctx"
+    if not title:
+        name += "_notitle"
+    return name
 
 
 def indexed_texts(chunks: list[Chunk], contexts: dict[str, str] | None) -> list[str]:
@@ -31,14 +37,25 @@ def indexed_texts(chunks: list[Chunk], contexts: dict[str, str] | None) -> list[
     return [with_context(c, contexts) for c in chunks]
 
 
+def index_fields(
+    chunks: list[Chunk], texts: list[str], title: bool = True
+) -> tuple[list[str], list[str]]:
+    """(text to embed, text for BM25), with or without the article title in front."""
+    heading = [c.title if title else "" for c in chunks]
+    embedded = [doc_text(h, t) for h, t in zip(heading, texts)]
+    searchable = [f"{h}\n{t}".strip() for h, t in zip(heading, texts)]
+    return embedded, searchable
+
+
 def open_table(
     source: TextSource,
     chunker: Chunker,
     rebuild: bool = False,
     contextual: bool = False,
+    title: bool = True,
 ):
     db = lancedb.connect(DB_PATH)
-    name = table_name(source, chunker, contextual)
+    name = table_name(source, chunker, contextual, title)
     if not rebuild and name in db.list_tables().tables:
         return db.open_table(name)
 
@@ -50,7 +67,8 @@ def open_table(
     )
     texts = indexed_texts(chunks, contexts)
     print(f"building {name}: {len(chunks):,} chunks")
-    vecs = embed_docs([doc_text(c.title, t) for c, t in zip(chunks, texts)])
+    embedded, searchable = index_fields(chunks, texts, title)
+    vecs = embed_docs(embedded)
     data = pa.table(
         {
             "chunk_id": [c.id for c in chunks],
@@ -58,7 +76,7 @@ def open_table(
             "article_type": [c.article_type for c in chunks],
             "title": [c.title for c in chunks],
             "text": [c.text for c in chunks],
-            "search_text": [f"{c.title}\n{t}" for c, t in zip(chunks, texts)],
+            "search_text": searchable,
             "vector": pa.FixedSizeListArray.from_arrays(
                 pa.array(vecs.ravel(), type=pa.float32()), vecs.shape[1]
             ),
