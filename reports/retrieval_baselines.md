@@ -169,11 +169,11 @@ recall_any@20 differences are all within ±0.02 (full output: `python -m lastrag
 - Untested explanations: the title is already part of the embedded text (`title: ... | text: ...`) and section chunks
   already begin with their heading, so the note may add little the retriever did not have. A title ablation
   (no title / title / title + note) would test it.
-- Latency: p50 with context was higher in every pair (dense 225 vs 123 ms on ExpertWritten, 219 vs 146 on Simulated;
-  bm25 8-9 vs 5-6 ms; rrf 203-207 vs 163-166 ms). The no-title arms in Step 4c, which carry no notes at all, show
-  the same gap (dense 231 and 250 ms), so the notes are not the cause. The original baseline was measured in a
-  different session (git `20ad595-dirty`); until it is re-run back to back with the others, latency differences between
-  these rows are unconfirmed.
+- Latency: the first contextual runs had a higher p50 than the original baseline (dense 225 vs 123 ms on
+  ExpertWritten). Re-run back to back in one session (git `c60607e`), all four dense arms sit within noise of each
+  other (title 236 ms, no title 263, title + note 242, note only 242), so the notes do not slow retrieval. The
+  earlier 123-146 ms baseline figures came from a different session and machine state; latencies from separate
+  sessions in this report (including the Step 4 reranker rows) are not comparable with each other.
 
 ## Step 4c: is the title doing the note's job?
 
@@ -208,10 +208,24 @@ missing, but adds nothing on top of the title. That explains Step 4b: on this co
 the note says. It also suggests when the note would earn its cost: on documents with missing or uninformative titles.
 That is a hypothesis for other data, not something these runs test.
 
-Cautions: this step adds about 64 more paired comparisons, so isolated p-values just under 0.05 (for example BM25
-ExpertWritten MRR, +0.033) should not be quoted; the large, consistent effects (dropping the title for dense) are
-not at risk from that. The `-notitle` runs are labelled `-dirty` in their `git` field because they were run before
-the code was committed.
+**Planned comparisons.** The tables above are descriptive. The conclusions rest on three comparisons fixed in advance,
+for dense retrieval, on both sets, with nDCG@10 as the single primary metric (declared after the runs existed, so
+weaker than a true pre-registration). Bonferroni threshold for 6 tests: p < 0.0083.
+
+| planned comparison | ExpertWritten nDCG@10 | Simulated nDCG@10 |
+|---|---|---|
+| does the title matter? (title − no title) | +0.119 [+0.086, +0.152], p < 0.001 | +0.050 [+0.016, +0.086], p 0.005 |
+| does the note help when the title is missing? (note only − no title) | +0.086 [+0.048, +0.123], p < 0.001 | +0.028 [−0.010, +0.066], p 0.144 |
+| does the note add anything on top of the title? (title + note − title) | −0.019 [−0.049, +0.012], p 0.220 | +0.026 [−0.003, +0.056], p 0.083 |
+
+The title effect holds on both sets and survives the threshold. The note recovers the missing title on ExpertWritten
+but not on Simulated (where only recall_any@20 improves, +0.065, p 0.001). On top of the title the note shows nothing
+on either set. The only p < 0.05 among the ten numbers for that third comparison, ExpertWritten recall_all@5
+(−0.050, p 0.035), is negative and does not survive the threshold.
+
+Cautions: the earlier ablation tables contain about 64 comparisons, so isolated p-values just under 0.05 (for example
+BM25 ExpertWritten MRR, +0.033) should not be quoted. The first `-notitle` runs were labelled `-dirty`; all four dense
+arms were re-run on commit `c60607e`.
 
 ## Metric definitions
 
